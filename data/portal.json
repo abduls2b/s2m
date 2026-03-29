@@ -1,0 +1,29 @@
+{
+    "name": "mahir",
+    "url": "http:\/\/tv.fusion4k.cc\/stalker_portal\/c\/",
+    "mac": "00:1A:79:30:35:30",
+    "model": "MAG250",
+    "success": true,
+    "token": "0FF430CBC753BEA8DF9B2A4235F19362",
+    "random": "5f039b41ec273aeceb53f024ecd8225f1cbb0f11",
+    "device": {
+        "mac": "00:1A:79:30:35:30",
+        "sn": "49132DFCC3C85CD3CD69489310D2B792",
+        "snCut": "49132DFCC3C85",
+        "deviceId": "4FB9E4C0C6E705EB6ED46914F0DE121A8E219BFD742C5EF9E80293496CFA013F",
+        "deviceId2": "4FB9E4C0C6E705EB6ED46914F0DE121A8E219BFD742C5EF9E80293496CFA013F",
+        "signature": "D8909EE327620DC56F106CB8FE2CCCA871D07EB9F587B600DDF628818C8E9B8F",
+        "model": "MAG250"
+    },
+    "server_url": "http:\/\/tv.fusion4k.cc\/stalker_portal\/server\/load.php",
+    "portal_base": "http:\/\/tv.fusion4k.cc\/stalker_portal\/c\/",
+    "profile": {
+        "login": "5878392848",
+        "id": "33749",
+        "name": "",
+        "expiry": "2027-10-21 17:08:47",
+        "password": "7700",
+        "tariff": ""
+    },
+    "saved_at": "2026-03-28 19:34:42"
+}
