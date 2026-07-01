@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>JioTV Web</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+  <!-- Shaka Player v5.1.6 (core) -->
+  <script src="https://shaka-controls.vercel.app/shaka-player.compiled.js"></script>
+  <!-- Shaka Player UI library (v5.1.6) -->
+  <script src="https://shaka-controls.vercel.app/shaka-player.ui.js"></script>
+  <!-- Shaka Player UI default CSS -->
+  <link rel="stylesheet" href="https://shaka-controls.vercel.app/controls.css">
+
+  <style>
+    .shaka-video-container {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      touch-action: none;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      object-fit: contain;
+      touch-action: none;
+    }
+ 
+    @media (orientation: landscape) {
+      video {
+        object-fit: fill !important;
+      }
+    }
+    .shaka-spinner { display: none !important; }
+
+    .watermark {
+      position: absolute;
+      bottom: 24px;
+      right: 45px;
+      font-size: 20px;
+      color: white;
+      opacity: 0.3;
+      z-index: 10;
+      pointer-events: none;
+      animation: shine 4.4s infinite;
+      background: linear-gradient(120deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.8) 50%, rgba(255,255,255,0.1) 100%);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    @keyframes shine {
+      0% { background-position: 200% center; }
+      100% { background-position: -200% center; }
+    }
+
+    /* Buffering indicator */
+    .buffering-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 20;
+      display: none;
+      pointer-events: none;
+    }
+    .buffering-overlay.active {
+      display: block;
+    }
+    .buffering-spinner {
+      width: 60px;
+      height: 60px;
+      border: 5px solid rgba(255,255,255,0.1);
+      border-top: 5px solid #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="shaka-video-container" id="player">
+    <video id="video" autoplay></video>
+    <div class="watermark">Muskan</div>
+    <div class="buffering-overlay" id="bufferingIndicator">
+      <div class="buffering-spinner"></div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const streamUrl = urlParams.get('stream') || '';
+
+      if (!streamUrl) {
+        alert("Missing stream config");
+        return;
+      }
+
+      shaka.polyfill.installAll();
+      if (!shaka.Player.isBrowserSupported()) {
+        alert("Shaka Player not supported");
+        return;
+      }
+
+      const video = document.querySelector("video");
+      const container = document.getElementById("player");
+      const bufferingIndicator = document.getElementById("bufferingIndicator");
+
+      const player = new shaka.Player(video);
+      const ui = new shaka.ui.Overlay(player, container, video);
+      const controls = ui.getControls();
+
+      // --- ENHANCED BUFFERING CONFIGURATION ---
+      player.configure({
+        'streaming': {
+          // Increased buffer sizes for smoother playback
+          'bufferingGoal': 60,          // Target 60 seconds of buffer
+          'rebufferingGoal': 15,        // Rebuffer at 15 seconds (higher = less rebuffering)
+          'bufferBehind': 30,           // Keep 30 seconds behind
+          'retryParameters': {
+            'timeout': 15000,           // 15 second timeout
+            'maxAttempts': 5,           // More retry attempts
+            'baseDelay': 1000,          // Start with 1s delay
+            'backoffFactor': 2          // Exponential backoff
+          },
+          'segmentRequestTimeout': 20000, // 20 second segment timeout
+          
+          // Cross-origin and networking
+          'crossOriginCredentialPolicy': 'include',
+          
+          // Allow seeking with limited buffer
+          'smallGapLimit': 0.5,
+          
+          // Auto adjust bitrate
+          'preferredAudioLanguage': 'en',
+          'preferredTextLanguage': 'en',
+          
+          // Segment prefetching
+          'prefetchSegments': true,
+          
+          // Disable stall detection to prevent false positives
+          'stallEnabled': false,
+          
+          // Use 'low-latency' mode for faster startup
+          'liveLatency': 2,
+          
+          // Increase segment count for more buffer
+          'maxSegmentCount': 200
+        },
+        'manifest': {
+          'retryParameters': {
+            'timeout': 15000,
+            'maxAttempts': 3,
+            'baseDelay': 2000,
+            'backoffFactor': 2
+          },
+          // Refresh manifest more frequently for live streams
+          'defaultPresentationDelay': 10,
+          'maxManifestUpdateRetries': 5
+        },
+        // DASH specific config
+        'dash': {
+          'clockSyncUri': '',
+          'enableAudioGroups': true,
+          'enableFastSwitching': true,
+          'ignoreDrmInitData': false,
+          'xlinkFailGracefully': true
+        },
+        // Network config
+        'networking': {
+          'retryParameters': {
+            'timeout': 15000,
+            'maxAttempts': 5,
+            'baseDelay': 1000,
+            'backoffFactor': 2
+          },
+          'preferredVideoCodecs': ['avc1', 'hvc1', 'hev1'],
+          'preferredAudioCodecs': ['mp4a']
+        },
+        // ABR settings
+        'abr': {
+          'enabled': true,
+          'defaultBandwidthEstimate': 10000000, // Start with 10 Mbps estimate
+          'switchInterval': 2,                   // Wait 2 seconds before switching
+          'bandwidthUpgradeTarget': 0.85,        // Upgrade when bandwidth is 85% of target
+          'bandwidthDowngradeTarget': 0.95,      // Downgrade when bandwidth is 95% of target
+          'restrictToSwitch': true,
+          'restrictToElementSize': false
+        },
+        // Player settings
+        'preferredAudioChannelCount': 2,
+        'preferredDecryptionKey': '',
+        'restrictToCodecs': [],
+        'useNativeHlsOnSafari': true
+      });
+
+      // --- BUFFERING EVENT HANDLERS ---
+      let bufferingTimeout = null;
+
+      player.addEventListener('buffering', (event) => {
+        const isBuffering = event.buffering;
+        
+        if (isBuffering) {
+          // Show buffering indicator
+          bufferingIndicator.classList.add('active');
+          
+          // Clear any existing timeout
+          if (bufferingTimeout) {
+            clearTimeout(bufferingTimeout);
+            bufferingTimeout = null;
+          }
+          
+          console.log('📦 Buffering started');
+        } else {
+          // Hide buffering indicator after a short delay (prevents flashing)
+          bufferingTimeout = setTimeout(() => {
+            bufferingIndicator.classList.remove('active');
+            bufferingTimeout = null;
+            console.log('▶️ Buffering ended');
+          }, 300);
+        }
+      });
+
+      // --- ERROR HANDLING ---
+      player.addEventListener('error', (event) => {
+        console.error('🔥 Player Error:', event.detail);
+        // Attempt recovery for network errors
+        if (event.detail.code === 1002 || event.detail.code === 1003) {
+          console.log('🔄 Attempting recovery...');
+          setTimeout(async () => {
+            try {
+              await player.load(streamUrl);
+              await video.play();
+            } catch (e) {
+              console.error('Recovery failed:', e);
+            }
+          }, 3000);
+        }
+      });
+
+      // --- LOAD STREAM ---
+      try {
+        console.log('📡 Loading stream:', streamUrl);
+        await player.load(streamUrl);
+        
+        // Start playback
+        await video.play();
+        console.log('▶️ Playing');
+        
+        // Log buffer status periodically
+        setInterval(() => {
+          const stats = player.getStats();
+          console.log(`📊 Buffer: ${stats.bufferSeconds.toFixed(1)}s | State: ${stats.state}`);
+        }, 5000);
+        
+      } catch (error) {
+        console.error("❌ Playback error:", error);
+        alert(`Playback Error: ${error.message || 'Unknown error'}`);
+      }
+
+      // --- ADAPTIVE BITRATE OPTIMIZATION ---
+      // Monitor for stalled playback and handle it
+      let stallCount = 0;
+      let lastTime = video.currentTime;
+      
+      setInterval(() => {
+        if (!video.paused) {
+          const currentTime = video.currentTime;
+          if (Math.abs(currentTime - lastTime) < 0.1) {
+            stallCount++;
+            if (stallCount >= 5) {
+              console.warn('⚠️ Playback stalled, forcing refresh...');
+              // Force a refresh by reloading
+              if (!player.isBuffering()) {
+                player.configure({ 'streaming': { 'stallEnabled': true } });
+                setTimeout(() => {
+                  player.configure({ 'streaming': { 'stallEnabled': false } });
+                }, 1000);
+              }
+              stallCount = 0;
+            }
+          } else {
+            stallCount = 0;
+          }
+          lastTime = currentTime;
+        }
+      }, 1000);
+
+      console.log('✅ Player initialized successfully');
+    });
+  </script>
+</body>
+</html>

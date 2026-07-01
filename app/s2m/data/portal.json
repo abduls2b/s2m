@@ -1,0 +1,29 @@
+{
+    "name": "Mahir",
+    "url": "http:\/\/tv.stream4k.cc\/stalker_portal\/c\/",
+    "mac": "00:1A:79:00:04:56",
+    "model": "MAG250",
+    "success": true,
+    "token": "E12D36161E5EC1C2535F671CD9FFEAC8",
+    "random": "102564f3f47bab6c53dbfe88190004f7664ca57e",
+    "device": {
+        "mac": "00:1A:79:00:04:56",
+        "sn": "FC3306C53B0BD2CA8F7717C558E8A039",
+        "snCut": "552C140659D92",
+        "deviceId": "7058F18DB34C1B64B826689CBE96C2E4DE7E469A3C20BC12883F219C0C119E5E",
+        "deviceId2": "7058F18DB34C1B64B826689CBE96C2E4DE7E469A3C20BC12883F219C0C119E5E",
+        "signature": "D48ED4F0A56CA823AFC34414EF3FB9F9980606D4730303DC6590DC7255807F34",
+        "model": "MAG250"
+    },
+    "server_url": "http:\/\/tv.stream4k.cc\/stalker_portal\/server\/load.php",
+    "portal_base": "http:\/\/tv.stream4k.cc\/stalker_portal\/c\/",
+    "profile": {
+        "login": "",
+        "id": "",
+        "name": "",
+        "expiry": null,
+        "password": "",
+        "tariff": ""
+    },
+    "saved_at": "2026-07-01 11:59:15"
+}
