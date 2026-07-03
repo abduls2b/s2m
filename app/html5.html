@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MSE Video Player · Auto Load</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #0a0a0a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        .player-container {
+            background: #1a1a1a;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+            max-width: 900px;
+            width: 100%;
+            margin: 20px;
+        }
+        video {
+            width: 100%;
+            border-radius: 8px;
+            background: #000;
+            display: block;
+        }
+        /* no controls, no status – everything hidden */
+        .controls {
+            display: none;
+        }
+        /* keep video container clean */
+        .player-container {
+            padding: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="player-container">
+    <!-- video element: autoplay, playsinline, controls for user -->
+    <video id="videoPlayer" controls autoplay playsinline></video>
+    <!-- no status, no buttons, no url -->
+</div>
+
+<script>
+    (function () {
+        'use strict';
+
+        const video = document.getElementById('videoPlayer');
+
+        // ── get stream URL from "stream" param ──
+        function getStreamUrlFromParam() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('stream');
+        }
+
+        // ── core MSE loader (fetch + append) – no UI updates ──
+        function loadStream(url) {
+            if (!url) {
+                // silent fail: no status shown
+                return;
+            }
+
+            // reset any previous media
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+
+            // heuristic: detect HLS / DASH / TS
+            let streamType = 'unknown';
+            const lower = url.toLowerCase();
+            if (lower.includes('.m3u8') || lower.includes('m3u8')) {
+                streamType = 'hls';
+            } else if (lower.includes('.mpd') || lower.includes('mpd')) {
+                streamType = 'dash';
+            } else if (lower.includes('.ts') || lower.includes('ts')) {
+                streamType = 'ts';
+            }
+
+            // ── HLS: try native first, but DO NOT show any "HLS (native)" text ──
+            if (streamType === 'hls') {
+                const canPlayHls = video.canPlayType('application/vnd.apple.mpegurl') ||
+                    video.canPlayType('application/x-mpegURL');
+                if (canPlayHls) {
+                    video.src = url;
+                    video.play().catch(() => {});
+                    return; // native HLS, no status, no text
+                }
+                // fallback to MSE
+                loadWithMSE(url, streamType);
+                return;
+            }
+
+            // ── DASH: direct src fallback ──
+            if (streamType === 'dash') {
+                video.src = url;
+                video.play().catch(() => {});
+                return;
+            }
+
+            // ── TS / unknown → MSE ──
+            if (streamType === 'ts' || streamType === 'unknown') {
+                loadWithMSE(url, streamType);
+                return;
+            }
+
+            // fallback: direct src
+            video.src = url;
+            video.play().catch(() => {});
+        }
+
+        // ── MSE loader (fetch + append) – completely silent ──
+        function loadWithMSE(url, type) {
+            if (!window.MediaSource) {
+                // MSE not supported – fallback to direct src
+                video.src = url;
+                video.play().catch(() => {});
+                return;
+            }
+
+            const mediaSource = new MediaSource();
+            video.src = URL.createObjectURL(mediaSource);
+
+            let sourceBuffer = null;
+            let appendQueue = [];
+            let isAppending = false;
+
+            mediaSource.addEventListener('sourceopen', function onSourceOpen() {
+                // determine mime type
+                let mimeType = 'video/mp4';
+                if (type === 'hls' || url.includes('.m3u8')) {
+                    mimeType = 'video/mp4';
+                } else if (type === 'ts' || url.includes('.ts')) {
+                    mimeType = 'video/mp2t';
+                } else {
+                    mimeType = 'video/mp4';
+                }
+
+                // fallback if MP2T not supported
+                if (mimeType === 'video/mp2t' && !MediaSource.isTypeSupported(mimeType)) {
+                    mimeType = 'video/mp4';
+                }
+
+                try {
+                    sourceBuffer = mediaSource.addSourceBuffer(mimeType);
+                } catch (e) {
+                    // fallback to direct src
+                    video.src = url;
+                    video.play().catch(() => {});
+                    return;
+                }
+
+                // start fetch
+                fetchStreamData(url);
+            });
+
+            function fetchStreamData(url) {
+                fetch(url)
+                    .then(response => {
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        return response.arrayBuffer();
+                    })
+                    .then(data => {
+                        appendToBuffer(data);
+                    })
+                    .catch(() => {
+                        // fallback direct src
+                        video.src = url;
+                        video.play().catch(() => {});
+                    });
+            }
+
+            function appendToBuffer(data) {
+                if (!sourceBuffer || mediaSource.readyState !== 'open') {
+                    return;
+                }
+                appendQueue.push(data);
+                if (!isAppending) {
+                    processQueue();
+                }
+            }
+
+            function processQueue() {
+                if (appendQueue.length === 0 || !sourceBuffer || sourceBuffer.updating) {
+                    isAppending = false;
+                    return;
+                }
+
+                isAppending = true;
+                const data = appendQueue.shift();
+
+                try {
+                    sourceBuffer.appendBuffer(data);
+                } catch (e) {
+                    isAppending = false;
+                    appendQueue = [];
+                    return;
+                }
+
+                sourceBuffer.addEventListener('updateend', function onUpdate() {
+                    sourceBuffer.removeEventListener('updateend', onUpdate);
+                    isAppending = false;
+                    processQueue();
+                });
+
+                sourceBuffer.addEventListener('error', function onError() {
+                    sourceBuffer.removeEventListener('error', onError);
+                    isAppending = false;
+                    appendQueue = [];
+                });
+            }
+
+            // auto-play when data loads
+            video.addEventListener('loadeddata', () => {
+                video.play().catch(() => {});
+            });
+        }
+
+        // ── load from URL param on page load ──
+        function init() {
+            const streamUrl = getStreamUrlFromParam();
+            if (streamUrl) {
+                loadStream(streamUrl);
+            }
+            // if no URL, video stays empty – no message
+        }
+
+        // ── start ──
+        init();
+    })();
+</script>
+</body>
+</html>
